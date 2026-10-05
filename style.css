@@ -1,0 +1,292 @@
+/* ===== Theme: Bake & Bloom (swap these to re-theme the game) ===== */
+:root {
+  --page-bg:
+    linear-gradient(rgba(255, 247, 234, 0.30), rgba(255, 247, 234, 0.55)),
+    url("assets/bg.jpg") center / cover no-repeat,
+    #f5e2c6;
+  --text: #5a3a24;
+  --text-dim: #8a6a50;
+  --title: #c0573e;
+  --title-shadow: #f0c6a2;
+  --panel: rgba(255, 252, 245, 0.75);
+  --panel-border: rgba(160, 100, 60, 0.22);
+  --frame-light: #dcaa72;
+  --frame-dark: #a9713f;
+  --board-bg: #fbf3e3;
+  --cell-line: rgba(120, 80, 40, 0.08);
+  --board-inset: rgba(120, 70, 30, 0.28);
+  --accent: #e98466;
+  --accent-dark: #cf6247;
+  --accent-deep: #94402a;
+  --on-accent: #fffaf3;
+  --popup: #ffffff;
+
+  --board-size: min(92vw, 480px);
+  --frame: 10px; /* wooden border around the board */
+  --cell: calc(var(--board-size) / 8);
+  --tile-pad: calc(var(--cell) * 0.07);
+  --radius: calc(var(--cell) * 0.28);
+
+  --move-ms: 200ms;
+  --fall-ms: 340ms;
+  --shuffle-ms: 600ms;
+}
+
+/* ===== Page ===== */
+* { box-sizing: border-box; }
+
+html, body { margin: 0; min-height: 100%; }
+
+body {
+  font-family: "Trebuchet MS", "Avenir Next", system-ui, sans-serif;
+  color: var(--text);
+  background: #f5e2c6;
+  touch-action: manipulation; /* no double-tap zoom */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* The page background lives on a fixed layer so it stays put while scrolling,
+   including on iOS, which ignores background-attachment: fixed. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--page-bg);
+}
+
+.app {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 16px 12px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+/* ===== Header ===== */
+.header { text-align: center; width: 100%; }
+
+.title {
+  margin: 0;
+  font-size: clamp(2rem, 8vw, 2.8rem);
+  letter-spacing: 0.04em;
+  color: var(--title);
+  text-shadow: 0 3px 0 var(--title-shadow);
+}
+
+.tagline { margin: 4px 0 12px; color: var(--text-dim); }
+
+.stats { display: flex; justify-content: center; gap: 12px; }
+
+.stat {
+  min-width: 110px;
+  padding: 8px 16px;
+  border-radius: 14px;
+  background: var(--panel);
+  border: 2px solid var(--panel-border);
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+}
+
+.stat-value { font-size: 1.6rem; font-weight: bold; }
+.stat-value.bump { animation: bump 300ms ease-out; }
+
+/* ===== Board ===== */
+.board-wrap {
+  position: relative;
+  padding: var(--frame);
+  border-radius: 22px;
+  background: linear-gradient(160deg, var(--frame-light), var(--frame-dark));
+  box-shadow: 0 10px 24px rgba(90, 50, 20, 0.3), inset 0 2px 0 rgba(255,255,255,0.4);
+}
+
+.board {
+  position: relative;
+  width: var(--board-size);
+  height: var(--board-size);
+  border-radius: 14px;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  background-color: var(--board-bg);
+  background-image:
+    linear-gradient(var(--cell-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--cell-line) 1px, transparent 1px);
+  background-size: var(--cell) var(--cell);
+  box-shadow: inset 0 3px 12px var(--board-inset);
+}
+
+/* ===== Tiles ===== */
+/* Position comes from --r / --c; changing them animates the move. */
+.tile {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--cell);
+  height: var(--cell);
+  padding: var(--tile-pad);
+  transform: translate(calc(var(--c) * 100%), calc(var(--r) * 100%));
+  transition: transform var(--move-ms) ease-in-out;
+  cursor: pointer;
+}
+
+.board.shuffling .tile { transition-duration: var(--shuffle-ms); }
+
+.board.falling .tile {
+  transition-duration: var(--fall-ms);
+  transition-timing-function: cubic-bezier(0.3, 1.3, 0.6, 1);
+}
+
+.tile-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius);
+  display: grid;
+  place-items: center;
+  font-size: calc(var(--cell) * 0.56);
+  line-height: 1;
+  background: radial-gradient(circle at 30% 25%, rgba(255,255,255,0.55), transparent 45%), var(--piece-color);
+  box-shadow: inset 0 -4px 0 rgba(0,0,0,0.14), 0 3px 5px rgba(90, 50, 20, 0.25);
+  transition: transform 120ms ease;
+}
+
+.tile-inner img { width: 82%; height: 82%; object-fit: contain; pointer-events: none; }
+
+@media (hover: hover) and (pointer: fine) {
+  .tile:hover .tile-inner { transform: scale(1.06); }
+}
+
+.tile.selected .tile-inner {
+  animation: pulse 900ms ease-in-out infinite;
+  box-shadow: 0 0 0 3px #fff, 0 0 18px 4px var(--accent);
+}
+
+.tile.shake .tile-inner { animation: shake 300ms ease; }
+.tile.pop .tile-inner { animation: pop 260ms ease-out forwards; }
+
+/* ===== Feedback overlays ===== */
+.popup {
+  position: absolute;
+  z-index: 3;
+  transform: translateX(-50%);
+  pointer-events: none;
+  font-weight: bold;
+  font-size: 1.3rem;
+  color: var(--popup);
+  text-shadow: 0 2px 0 var(--accent-deep), 0 0 6px var(--accent-deep);
+  animation: float-up 800ms ease-out forwards;
+}
+
+.banner {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0 12%;
+  text-align: center;
+  pointer-events: none;
+  font-size: clamp(1.6rem, 7vw, 2.4rem);
+  font-weight: bold;
+  color: var(--accent-dark);
+  text-shadow:
+    2px 2px 0 var(--on-accent), -2px -2px 0 var(--on-accent),
+    2px -2px 0 var(--on-accent), -2px 2px 0 var(--on-accent),
+    0 6px 0 var(--accent-deep), 0 0 24px rgba(255, 250, 240, 0.9);
+  opacity: 0;
+}
+
+.banner.show { animation: banner 900ms ease-out; }
+
+/* ===== Controls & instructions ===== */
+.btn {
+  font: inherit;
+  font-weight: bold;
+  font-size: 1.05rem;
+  padding: 10px 28px;
+  border: none;
+  border-radius: 999px;
+  color: var(--on-accent);
+  background: linear-gradient(180deg, var(--accent), var(--accent-dark));
+  box-shadow: 0 4px 0 var(--accent-deep), 0 6px 12px rgba(90, 50, 20, 0.3);
+  cursor: pointer;
+  transition: transform 80ms ease, box-shadow 80ms ease;
+}
+
+.btn:hover { filter: brightness(1.05); }
+.btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--accent-deep), 0 2px 6px rgba(90, 50, 20, 0.3); }
+.btn:focus-visible { outline: 3px solid var(--accent-deep); outline-offset: 3px; }
+
+.howto {
+  width: 100%;
+  max-width: calc(var(--board-size) + 2 * var(--frame));
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: var(--panel);
+  border: 2px solid var(--panel-border);
+  color: var(--text-dim);
+}
+
+.howto summary { cursor: pointer; font-weight: bold; color: var(--text); }
+.howto ul { margin: 8px 0 2px; padding-left: 20px; line-height: 1.5; }
+
+/* ===== Animations ===== */
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-12%); }
+  75% { transform: translateX(12%); }
+}
+
+@keyframes pop {
+  0% { transform: scale(1); opacity: 1; }
+  40% { transform: scale(1.3); opacity: 1; filter: brightness(1.5); }
+  100% { transform: scale(0); opacity: 0; }
+}
+
+@keyframes float-up {
+  0% { transform: translate(-50%, 0) scale(0.8); opacity: 0; }
+  20% { transform: translate(-50%, -10px) scale(1.1); opacity: 1; }
+  100% { transform: translate(-50%, -50px) scale(1); opacity: 0; }
+}
+
+@keyframes banner {
+  0% { opacity: 0; transform: scale(0.6); }
+  25% { opacity: 1; transform: scale(1.1); }
+  70% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1); }
+}
+
+@keyframes bump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.25); color: var(--accent); }
+  100% { transform: scale(1); }
+}
+
+/* ===== Reduced motion: keep feedback, drop the bouncing ===== */
+@media (prefers-reduced-motion: reduce) {
+  :root { --move-ms: 1ms; --fall-ms: 1ms; --shuffle-ms: 1ms; }
+  .tile.selected .tile-inner { animation: none; }
+  .tile.shake .tile-inner { animation: none; }
+  .tile.pop .tile-inner { animation: fade-out 200ms forwards; }
+  .tile:hover .tile-inner { transform: none; }
+  .popup, .banner.show { animation-name: fade-in-out; }
+}
+
+@keyframes fade-out { to { opacity: 0; } }
+@keyframes fade-in-out { 0%, 100% { opacity: 0; } 30%, 70% { opacity: 1; } }

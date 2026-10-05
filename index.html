@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bake &amp; Bloom — Match 3</title>
+  <meta name="theme-color" content="#f5e2c6">
+
+  <!-- Home screen: icon, name, and full-screen launch -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="assets/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Bake &amp; Bloom">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1 class="title">Bake &amp; Bloom</h1>
+      <p class="tagline">Line up three treats or sprouts to tidy up</p>
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-label">Score</span>
+          <span class="stat-value" id="score">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Best</span>
+          <span class="stat-value" id="best">0</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="board-wrap">
+      <div class="board" id="board" role="grid" aria-label="Game board"></div>
+      <div class="banner" id="banner" aria-live="polite"></div>
+    </main>
+
+    <div class="controls">
+      <button class="btn" id="restart" type="button">New Game</button>
+    </div>
+
+    <details class="howto" open>
+      <summary>How to play</summary>
+      <ul>
+        <li>Swap two neighboring pieces (up, down, left, right) by clicking one, then the other, or by swiping.</li>
+        <li>A swap only counts if it lines up 3 or more of the same piece.</li>
+        <li>Longer lines and chain reactions score big.</li>
+      </ul>
+    </details>
+  </div>
+
+  <script src="js/theme.js"></script>
+  <script src="js/board.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
