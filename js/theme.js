@@ -14,7 +14,7 @@ M3.THEME = {
     { id: 'tulip',     label: 'Tulip',     icon: 'assets/pieces/tulip.png', color: '#c8adf2' },
   ],
   // Names for the special pieces (striped, wrapped, and color bomb in other match-3 games).
-  specials: { line: 'Striped', wrap: 'Gift Box', bomb: 'Sprinkle Bomb' },
+  specials: { line: 'Striped', wrap: 'Gift Box', bomb: 'Sprinkle Bomb', fly: 'Butterfly' },
   // Shown for cascades of 3, 4, 5, and 6+ clears in one move.
   words: ['Sweet!', 'Tasty!', 'Delicious!', 'Divine!'],
   // Shown when a level is won and leftover moves turn into striped pieces.

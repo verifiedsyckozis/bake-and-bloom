@@ -157,3 +157,4 @@ The game now follows the classic match-3 rules.
 - **Scoring**: 3→60, 4→120, L/T or 5→200, ×chain; 60 per piece cleared by a special; 1000 per frosting layer.
 - **Tuning**: star thresholds and move counts were set by simulating 100+ games per level with random, casual, and greedy bots. The casual bot (half random) passes early levels about 95% of the time and the later ones 50–75%.
 - **Hints**: after 6 idle seconds, two pieces that make a valid move wiggle.
+- **Butterfly** (added 2026-10-05): a 2×2 square of one kind makes `'fly'`. Line specials take priority if the square is part of a 4+ line or an L/T. When it fires, it flies to one target: thickest frosting first, then a piece the order still needs (`setWanted`), then anywhere. Butterfly + striped/box carries that special to the target; butterfly + butterfly sends three; bomb + butterfly turns a color into butterflies. New boards never start with a square.

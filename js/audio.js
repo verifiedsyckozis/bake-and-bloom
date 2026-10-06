@@ -120,6 +120,9 @@ M3.audio = (function () {
       SOUNDS.wrap();
       SOUNDS.bomb();
     },
+    fly() {
+      for (let i = 0; i < 6; i++) tone(midi(i % 2 ? 91 : 86), { delay: i * 0.05, dur: 0.06, type: 'triangle', vol: 0.06 });
+    },
     frost() { noise({ dur: 0.09, vol: 0.12, filter: 'highpass', freq: 4500 }); },
     shuffle() { noise({ dur: 0.45, vol: 0.12, freq: 400, slide: 2500 }); },
     word() { [84, 88, 91].forEach(n => tone(midi(n), { dur: 0.5, type: 'triangle', vol: 0.06 })); },

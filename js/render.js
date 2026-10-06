@@ -6,9 +6,9 @@ M3.render = (function () {
   // Keep in sync with the durations in style.css.
   const TIMING = {
     move: 200, pop: 260, fall: 340, shake: 300, popup: 800,
-    shuffle: 600, shuffleDelay: 700, effect: 420, convert: 450,
+    shuffle: 600, shuffleDelay: 700, effect: 420, convert: 450, fly: 380,
   };
-  const SPECIAL_CLASSES = ['sp-h', 'sp-v', 'sp-wrap', 'sp-bomb', 'sp-armed'];
+  const SPECIAL_CLASSES = ['sp-h', 'sp-v', 'sp-wrap', 'sp-bomb', 'sp-armed', 'sp-fly'];
   const SIZE = 8;
 
   let boardEl = null;
@@ -38,6 +38,7 @@ M3.render = (function () {
     const base = M3.THEME.pieces[piece.type].label;
     if (piece.special === 'h' || piece.special === 'v') return names.line + ' ' + base;
     if (piece.special === 'wrap' || piece.special === 'armed') return base + ' ' + names.wrap;
+    if (piece.special === 'fly') return base + ' ' + names.fly;
     return base;
   }
 
@@ -185,7 +186,7 @@ M3.render = (function () {
     }
   }
 
-  // Striped beams, gift-box blasts, and bomb sparkles.
+  // Striped beams, gift-box blasts, bomb sparkles, and butterfly flights.
   function effects(list) {
     const add = (cls, vars) => {
       const el = document.createElement('div');
@@ -199,6 +200,7 @@ M3.render = (function () {
       else if (fx.kind === 'col') add('fx-col', { c: fx.c });
       else if (fx.kind === 'blast') add('fx-blast', { r: fx.r, c: fx.c, radius: fx.radius });
       else if (fx.kind === 'board') add('fx-board', {});
+      else if (fx.kind === 'fly') add('fx-fly', { r: fx.r, c: fx.c, tr: fx.to.r, tc: fx.to.c });
       else if (fx.kind === 'bomb') {
         add('fx-blast fx-sprinkle', { r: fx.r, c: fx.c, radius: 1 });
         for (const t of fx.targets) add('fx-spark', { r: t.r, c: t.c });

@@ -38,7 +38,7 @@ M3.LEVELS = [
   {
     moves: 18, colors: 5, goal: 'order', order: [{ key: 0, count: 15 }, { key: 3, count: 15 }],
     stars: [2000, 10000, 15000],
-    tip: 'Collect croissants and potted plants by matching them.',
+    tip: 'Match 4 in a square to free a Butterfly. It flies off to grab a piece you need!',
   },
   {
     moves: 20, colors: 6, goal: 'score', stars: [4500, 8000, 12000],
@@ -65,7 +65,7 @@ M3.LEVELS = [
     tip: 'Make Striped pieces (4 in a row) and a Gift Box (L or T shape).',
   },
   {
-    moves: 36, colors: 5, goal: 'frost',
+    moves: 30, colors: 5, goal: 'frost',
     frost: Array(8).fill('11111111'),
     stars: [20000, 85000, 92000],
     tip: 'Frosting everywhere! Specials scrape off lots at once.',
@@ -80,7 +80,7 @@ M3.LEVELS = [
     tip: 'Swap two specials together for a combo!',
   },
   {
-    moves: 38, colors: 5, goal: 'frost',
+    moves: 30, colors: 5, goal: 'frost',
     frost: [
       '22....22',
       '.22..22.',
@@ -100,7 +100,7 @@ M3.LEVELS = [
     tip: 'Bomb + Striped turns a whole color into Striped pieces.',
   },
   {
-    moves: 34, colors: 5, goal: 'frost',
+    moves: 28, colors: 5, goal: 'frost',
     frost: [
       '11111111',
       '12....21',
@@ -111,7 +111,7 @@ M3.LEVELS = [
       '12....21',
       '11111111',
     ],
-    stars: [10000, 66000, 76000],
+    stars: [10000, 64000, 72000],
     tip: 'Work the edges.',
   },
   {
@@ -120,7 +120,7 @@ M3.LEVELS = [
     tip: 'A garden order: cacti and potted plants.',
   },
   {
-    moves: 44, colors: 5, goal: 'frost',
+    moves: 36, colors: 5, goal: 'frost',
     frost: Array(8).fill('22222222'),
     stars: [30000, 155000, 168000],
     tip: 'The big bake. Every cell has two layers.',

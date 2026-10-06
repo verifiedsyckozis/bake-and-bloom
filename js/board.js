@@ -6,6 +6,8 @@
 //            'h' / 'v'  striped: clears its row / column
 //            'wrap'     gift box: blasts 3x3, falls, then blasts again
 //            'bomb'     sprinkle bomb: clears every piece of one color
+//            'fly'      butterfly: flies to one target (frosting or a wanted piece first) and clears it
+//                       Optional: `carry` (a special it drops on its target), `flights` (how many targets)
 //            'armed'    a gift box that already blasted once; it goes off again next step
 // frost[row][col] -> layers of frosting under that cell (0, 1, or 2)
 window.M3 = window.M3 || {};
@@ -15,9 +17,14 @@ M3.board = (function () {
   const POINTS = { match3: 60, match4: 120, shape: 200, extraCell: 20, blasted: 60, frost: 1000 };
   let colors = 6;
   let nextId = 1;
+  let wanted = new Set(); // piece types the current level's order still needs; butterflies aim for them
 
   function setColors(n) {
     colors = n;
+  }
+
+  function setWanted(types) {
+    wanted = new Set(types);
   }
 
   function randomType() {
@@ -59,16 +66,19 @@ M3.board = (function () {
   function kindOf(piece) {
     if (!piece) return null;
     if (piece.special === 'h' || piece.special === 'v') return 'line';
-    if (piece.special === 'wrap' || piece.special === 'bomb') return piece.special;
+    if (piece.special === 'wrap' || piece.special === 'bomb' || piece.special === 'fly') return piece.special;
     return null;
   }
 
   // True if placing `type` at (r, c) would complete 3 in a row with the two
-  // cells to the left or the two above (the only ones filled so far).
+  // cells to the left or the two above, or a 2x2 square with the cells
+  // up and to the left (the only ones filled so far).
   function wouldMatch(grid, r, c, type) {
     const left = c >= 2 && grid[r][c - 1].type === type && grid[r][c - 2].type === type;
     const up = r >= 2 && grid[r - 1][c].type === type && grid[r - 2][c].type === type;
-    return left || up;
+    const square = r >= 1 && c >= 1 && grid[r - 1][c - 1].type === type &&
+      grid[r - 1][c].type === type && grid[r][c - 1].type === type;
+    return left || up || square;
   }
 
   // A full board with no matches and at least one valid move.
@@ -87,7 +97,7 @@ M3.board = (function () {
     return grid;
   }
 
-  // Scan rows, then columns, for runs of 3+.
+  // Scan rows, then columns, for runs of 3+, then for 2x2 squares (dir 'sq').
   // Returns { matches: [{ cells, length, dir, type }], cells: deduped [{r, c}] }.
   function findMatches(grid) {
     const matches = [];
@@ -113,6 +123,16 @@ M3.board = (function () {
 
     scan('h');
     scan('v');
+
+    for (let r = 0; r < SIZE - 1; r++) {
+      for (let c = 0; c < SIZE - 1; c++) {
+        const cells = [{ r, c }, { r, c: c + 1 }, { r: r + 1, c }, { r: r + 1, c: c + 1 }];
+        const type = grid[r][c] && grid[r][c].type;
+        if (cells.every(p => matchable(grid[p.r][p.c]) && grid[p.r][p.c].type === type)) {
+          matches.push({ cells, length: 4, dir: 'sq', type });
+        }
+      }
+    }
     return { matches, cells: dedupe(matches.flatMap(m => m.cells)) };
   }
 
@@ -131,10 +151,12 @@ M3.board = (function () {
     const groups = [];
     for (const m of matches) {
       const keys = new Set(m.cells.map(key));
-      const merged = { runs: [m], cells: m.cells.slice() };
+      const isSquare = m.dir === 'sq';
+      const merged = { runs: isSquare ? [] : [m], square: isSquare, cells: m.cells.slice() };
       for (let i = groups.length - 1; i >= 0; i--) {
         if (groups[i].cells.some(cell => keys.has(key(cell)))) {
           merged.runs.push(...groups[i].runs);
+          merged.square = merged.square || groups[i].square;
           merged.cells.push(...groups[i].cells);
           groups.splice(i, 1);
         }
@@ -145,22 +167,28 @@ M3.board = (function () {
     return groups;
   }
 
+  function longestRun(group) {
+    return group.runs.reduce((best, run) => (run.length > best.length ? run : best), group.runs[0]);
+  }
+
   // The special piece a group earns: 5 in a line -> bomb, L/T -> gift box,
-  // 4 in a line -> striped. A horizontal 4 gives vertical stripes, and vice versa.
+  // 4 in a line -> striped (a horizontal 4 gives vertical stripes, and vice versa),
+  // 2x2 square -> butterfly.
   function specialFor(group) {
-    const longest = group.runs.reduce((best, run) => (run.length > best.length ? run : best));
+    if (!group.runs.length) return 'fly';
+    const longest = longestRun(group);
     if (longest.length >= 5) return 'bomb';
     const hasH = group.runs.some(run => run.dir === 'h');
     const hasV = group.runs.some(run => run.dir === 'v');
     if (hasH && hasV) return 'wrap';
     if (longest.length === 4) return longest.dir === 'h' ? 'v' : 'h';
-    return null;
+    return group.square ? 'fly' : null;
   }
 
   function groupPoints(group, special) {
     const n = group.cells.length;
     if (special === 'wrap' || special === 'bomb') return POINTS.shape + POINTS.extraCell * Math.max(0, n - 5);
-    if (n >= 4) return POINTS.match4 + POINTS.extraCell * (n - 4);
+    if (n >= 4 || special === 'fly') return POINTS.match4 + POINTS.extraCell * Math.max(0, n - 4);
     return POINTS.match3;
   }
 
@@ -173,14 +201,15 @@ M3.board = (function () {
     const hCells = new Set(group.runs.filter(run => run.dir === 'h').flatMap(run => run.cells).map(key));
     const vCells = new Set(group.runs.filter(run => run.dir === 'v').flatMap(run => run.cells).map(key));
     const corner = group.cells.filter(cell => hCells.has(key(cell)) && vCells.has(key(cell)));
-    const longest = group.runs.reduce((best, run) => (run.length > best.length ? run : best));
-    const middle = longest.cells[Math.floor((longest.cells.length - 1) / 2)];
-    const order = [...preferred, ...corner, middle, ...longest.cells, ...group.cells];
+    const line = group.runs.length ? longestRun(group).cells : [];
+    const middle = line[Math.floor((line.length - 1) / 2)];
+    const order = [...preferred, ...corner, ...(middle ? [middle] : []), ...line, ...group.cells];
     return order.find(free) || null;
   }
 
   function middleOf(group) {
-    const longest = group.runs.reduce((best, run) => (run.length > best.length ? run : best));
+    if (!group.runs.length) return group.cells[0];
+    const longest = longestRun(group);
     return longest.cells[Math.floor((longest.cells.length - 1) / 2)];
   }
 
@@ -211,6 +240,24 @@ M3.board = (function () {
   function randomColorOnBoard(grid) {
     const types = [...new Set(grid.flat().filter(p => p && p.type >= 0).map(p => p.type))];
     return types.length ? types[Math.floor(Math.random() * types.length)] : -1;
+  }
+
+  // Where a butterfly lands: thickest frosting first, then a piece the order
+  // needs, then anywhere. Skips cells that are already being cleared.
+  function pickTarget(grid, frost, from, taken) {
+    const open = allCells().filter(cell => {
+      const piece = grid[cell.r][cell.c];
+      return piece && piece.special !== 'armed' && !taken.has(key(cell)) && key(cell) !== key(from);
+    });
+    if (!open.length) return null;
+    const score = cell => {
+      const layers = frost ? frost[cell.r][cell.c] : 0;
+      if (layers) return 10 + layers;
+      return wanted.has(grid[cell.r][cell.c].type) ? 5 : 0;
+    };
+    const best = Math.max(...open.map(score));
+    const top = open.filter(cell => score(cell) === best);
+    return top[Math.floor(Math.random() * top.length)];
   }
 
   // Clears `seeds` and everything their specials set off, in waves.
@@ -249,6 +296,17 @@ M3.board = (function () {
         const targets = cellsOfColor(grid, randomColorOnBoard(grid));
         effects.push({ kind: 'bomb', r, c, targets });
         queue.push(...targets);
+      } else if (piece.special === 'fly') {
+        for (let i = 0; i < (piece.flights || 1); i++) {
+          const taken = new Set([...visited, ...protect, ...queue.filter(inBounds).map(key)]);
+          const target = pickTarget(grid, frost, cell, taken);
+          if (!target) break;
+          effects.push({ kind: 'fly', r, c, to: target });
+          // A butterfly carrying a special drops it on the target, which then fires.
+          const landed = grid[target.r][target.c];
+          if (piece.carry && !landed.special) landed.special = piece.carry;
+          queue.push(target);
+        }
       }
 
       removed.push({ r, c, piece });
@@ -374,16 +432,28 @@ M3.board = (function () {
       const targets = cellsOfColor(grid, other.type);
       bomb.special = null;
       // Bomb + striped / gift box: every piece of that color becomes one, then they all fire.
-      if (ko === 'line' || ko === 'wrap') {
+      if (ko === 'line' || ko === 'wrap' || ko === 'fly') {
         for (const t of targets) {
           const piece = grid[t.r][t.c];
           if (piece.special) continue;
-          piece.special = ko === 'wrap' ? 'wrap' : (Math.random() < 0.5 ? 'h' : 'v');
+          piece.special = ko === 'line' ? (Math.random() < 0.5 ? 'h' : 'v') : ko;
           converted.push(piece);
         }
       }
       effects.push({ kind: 'bomb', r: at.r, c: at.c, targets });
       seeds = [at, ...targets];
+    } else if (kp === 'fly' || kq === 'fly') {
+      // Butterfly + butterfly: three butterflies. Butterfly + striped / gift box:
+      // the butterfly carries that special to its target.
+      const [fly, other] = kp === 'fly' ? [p, q] : [q, p];
+      if (kindOf(other) === 'fly') {
+        other.special = null;
+        fly.flights = 3;
+      } else {
+        fly.carry = other.special;
+        other.special = null;
+      }
+      seeds = [a, b];
     } else if (kp === 'line' && kq === 'line') {
       // Two striped: a cross through the center.
       p.special = q.special = null;
@@ -508,7 +578,7 @@ M3.board = (function () {
 
   return {
     SIZE, POINTS,
-    setColors, newPiece, createBoard, isAdjacent, swap, kindOf, findMatches, isCombo,
+    setColors, setWanted, newPiece, createBoard, isAdjacent, swap, kindOf, findMatches, isCombo,
     step, comboStep, clearCells, applyGravity, refill, findValidMove, hasValidMove, shuffle,
     parseFrost, frostLeft,
   };

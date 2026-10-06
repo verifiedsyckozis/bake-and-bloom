@@ -95,6 +95,7 @@ window.M3 = window.M3 || {};
     if (key === 'line') return R.pieceHTML(0, 'h');
     if (key === 'wrap') return R.pieceHTML(1, 'wrap');
     if (key === 'bomb') return R.pieceHTML(-1, 'bomb');
+    if (key === 'fly') return R.pieceHTML(4, 'fly');
     return R.pieceHTML(key, null);
   }
 
@@ -196,6 +197,12 @@ window.M3 = window.M3 || {};
     goalEl.innerHTML = html;
   }
 
+  // Butterflies aim for pieces the order still needs.
+  function updateWanted() {
+    const order = game.level.goal === 'order' ? game.level.order : [];
+    B.setWanted(order.filter(o => typeof o.key === 'number' && orderLeft(o) > 0).map(o => o.key));
+  }
+
   function goalsMet() {
     if (game.level.goal === 'frost') return B.frostLeft(game.frost) === 0;
     if (game.level.goal === 'order') return game.level.order.every(o => orderLeft(o) === 0);
@@ -213,6 +220,7 @@ window.M3 = window.M3 || {};
     B.setColors(level.colors);
     game.grid = B.createBoard();
     game.frost = B.parseFrost(level.frost);
+    updateWanted();
     $('map-screen').hidden = true;
     $('game-screen').hidden = false;
     $('level-label').textContent = 'Level ' + (index + 1);
@@ -345,17 +353,20 @@ window.M3 = window.M3 || {};
     else if (kinds.has('bomb')) A.play('bomb');
     if (kinds.has('blast')) A.play('wrap');
     if (kinds.has('row') || kinds.has('col')) A.play('line');
+    if (kinds.has('fly')) A.play('fly');
     A.play('match', chain);
     if (rec.frosted.length) A.play('frost');
     if (rec.created.length) setTimeout(() => A.play('special'), 120);
 
     for (const p of rec.popups) R.popup('+' + fmt(p.points), p.r, p.c);
+    if (kinds.has('fly')) await R.wait(R.TIMING.fly); // let butterflies land first
     await R.pop(rec.removed);
     R.updateFrost(rec.frosted);
     R.sync(game.grid);
 
     game.score += rec.score;
     for (const k in rec.collected) game.collected[k] = (game.collected[k] || 0) + rec.collected[k];
+    updateWanted();
     R.bump(scoreEl);
     updateHud();
   }

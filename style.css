@@ -397,6 +397,19 @@ body::before {
 }
 .tile.sp-bomb .tile-inner { animation: spin 8s linear infinite; }
 
+/* Butterfly: a little butterfly perched on the corner of the piece. */
+.sp-fly .tile-inner { box-shadow: inset 0 0 0 3px rgba(255,255,255,0.9), 0 3px 5px rgba(90, 50, 20, 0.25); }
+.sp-fly .tile-inner::after {
+  content: "🦋";
+  position: absolute;
+  right: -8%;
+  bottom: -8%;
+  font-size: calc(var(--cell) * 0.42);
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.3));
+  animation: flutter 700ms ease-in-out infinite alternate;
+}
+.mini.sp-fly .tile-inner::after { font-size: 13px; }
+
 /* ===== Frosting under pieces ===== */
 .frost {
   position: absolute;
@@ -473,6 +486,19 @@ body::before {
   background: radial-gradient(circle, #fff 0 20%, rgba(255, 230, 140, 0.8) 40%, transparent 70%);
   animation: blast 420ms ease-out forwards;
 }
+.fx-fly {
+  left: 0;
+  top: 0;
+  z-index: 3;
+  width: var(--cell);
+  height: var(--cell);
+  display: grid;
+  place-items: center;
+  font-size: calc(var(--cell) * 0.6);
+  animation: fly 420ms ease-in-out forwards;
+}
+.fx-fly::before { content: "🦋"; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.3)); }
+
 .fx-board {
   inset: 0;
   background: radial-gradient(circle, #fff 0 30%, rgba(255, 220, 160, 0.8) 60%, transparent 90%);
@@ -637,6 +663,7 @@ body::before {
   .tile.upgrade .tile-inner,
   .tile.sp-bomb .tile-inner,
   .tile.sp-armed .tile-inner,
+  .sp-fly .tile-inner::after,
   .level-btn.current { animation: none; }
   .fx { animation-name: fade-out; }
   .card, .card-stars span.on { animation: none; }
@@ -664,6 +691,17 @@ body::before {
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+@keyframes flutter {
+  from { transform: rotate(-12deg) scaleX(1); }
+  to { transform: rotate(8deg) scaleX(0.7); }
+}
+
+@keyframes fly {
+  0% { transform: translate(calc(var(--c) * 100%), calc(var(--r) * 100%)) scale(0.7); }
+  50% { transform: translate(calc((var(--c) + var(--tc)) * 50%), calc((var(--r) + var(--tr)) * 50% - 60%)) scale(1.3); }
+  100% { transform: translate(calc(var(--tc) * 100%), calc(var(--tr) * 100%)) scale(1); opacity: 0.9; }
+}
 
 @keyframes beam {
   0% { transform: var(--beam-from); opacity: 1; }
