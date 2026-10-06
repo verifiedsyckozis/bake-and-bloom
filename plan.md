@@ -145,3 +145,15 @@ Animation steps are `async/await` on small `wait(ms)` promises that match the CS
   - Input is locked during animations: spam-clicking doesn't break the board.
 - Console checks: call `M3.board.findMatches` and `hasValidMove` on hand-built grids, including an L/T shape where the shared cell is cleared once and both runs are scored.
 - **All browser checks use a Chromium browser.** Serve the folder locally (e.g. `python3 -m http.server`), open it in a new tab, take screenshots, click to swap, read console messages for errors, and resize to a mobile width. Record a GIF of a cascade for review.
+
+## 13. Classic rules update (2026-10-05)
+The game now follows the classic match-3 rules.
+- **Specials** (`board.js`): 4 in a line makes Striped (`'h'`/`'v'`; a horizontal 4 gives vertical stripes), an L/T makes a Gift Box (`'wrap'`: a 3×3 blast, then it turns `'armed'` and blasts again after falling), and 5 in a line makes a Sprinkle Bomb (`'bomb'`, `type: -1`). A special caught in any clear fires. The new special appears on the swapped cell, or else the L/T corner, or else the middle of the run.
+- **Combos** (`comboStep`): bomb+bomb clears the board; bomb+striped/box converts every piece of that color, then they fire; striped+striped makes a cross; striped+box clears 3 rows and 3 columns; box+box makes a 5×5 blast twice. A bomb swaps with anything, with no match needed.
+- **Levels** (`levels.js`): moves, colors, a goal (`score` / `frost` / `order`), and three star thresholds. Frosting has 1–2 layers under cells and loses a layer whenever its cell clears.
+- **End of level**: winning with moves left triggers the "Sweet Finish": the leftover moves become Striped pieces and every special fires. Running out of moves fails the level.
+- **Lives** (`save.js`): 5 hearts. You lose one when you fail, or when you quit after making a move. One comes back every 30 minutes. Progress, stars, and best scores are saved in `localStorage`.
+- **Sound** (`audio.js`): synthesized Web Audio effects with no files and a mute toggle. There's no background music.
+- **Scoring**: 3→60, 4→120, L/T or 5→200, ×chain; 60 per piece cleared by a special; 1000 per frosting layer.
+- **Tuning**: star thresholds and move counts were set by simulating 100+ games per level with random, casual, and greedy bots. The casual bot (half random) passes early levels about 95% of the time and the later ones 50–75%.
+- **Hints**: after 6 idle seconds, two pieces that make a valid move wiggle.

@@ -19,42 +19,75 @@
 </head>
 <body>
   <div class="app">
-    <header class="header">
-      <h1 class="title">Bake &amp; Bloom</h1>
-      <p class="tagline">Line up three treats or sprouts to tidy up</p>
-      <div class="stats">
-        <div class="stat">
-          <span class="stat-label">Score</span>
-          <span class="stat-value" id="score">0</span>
-        </div>
-        <div class="stat">
-          <span class="stat-label">Best</span>
-          <span class="stat-value" id="best">0</span>
-        </div>
+    <div class="topbar">
+      <div class="pill lives" id="lives" aria-live="polite">
+        <span class="heart" aria-hidden="true">♥</span>
+        <span id="lives-count">5</span>
+        <span class="life-timer" id="life-timer"></span>
       </div>
-    </header>
-
-    <main class="board-wrap">
-      <div class="board" id="board" role="grid" aria-label="Game board"></div>
-      <div class="banner" id="banner" aria-live="polite"></div>
-    </main>
-
-    <div class="controls">
-      <button class="btn" id="restart" type="button">New Game</button>
+      <button class="icon-btn" id="mute" type="button" aria-pressed="false" aria-label="Mute sounds">🔊</button>
     </div>
 
-    <details class="howto" open>
-      <summary>How to play</summary>
-      <ul>
-        <li>Swap two neighboring pieces (up, down, left, right) by clicking one, then the other, or by swiping.</li>
-        <li>A swap only counts if it lines up 3 or more of the same piece.</li>
-        <li>Longer lines and chain reactions score big.</li>
-      </ul>
-    </details>
+    <section class="screen" id="map-screen">
+      <header class="header">
+        <h1 class="title">Bake &amp; Bloom</h1>
+        <p class="tagline">Line up three treats or sprouts to tidy up</p>
+      </header>
+
+      <div class="level-grid" id="level-grid"></div>
+
+      <details class="howto">
+        <summary>How to play</summary>
+        <ul>
+          <li>Swap two neighboring pieces by tapping one, then the other, or by swiping. A swap only counts if it lines up 3 or more.</li>
+          <li>Each level gives you a set number of moves and a goal: reach a score, scrape off all the frosting, or fill an order.</li>
+          <li><b>4 in a row</b> bakes a <b>Striped</b> piece that clears its whole row or column.</li>
+          <li><b>An L or T shape</b> wraps a <b>Gift Box</b> that bursts 3×3, falls, and bursts again.</li>
+          <li><b>5 in a row</b> makes a <b>Sprinkle Bomb</b>. Swap it with any piece to clear every piece of that kind.</li>
+          <li>Swap two specials together for a bigger combo.</li>
+          <li>Run out of moves and you lose a heart. Hearts grow back, one every 30 minutes.</li>
+        </ul>
+      </details>
+    </section>
+
+    <section class="screen" id="game-screen" hidden>
+      <div class="hud">
+        <button class="icon-btn" id="back" type="button" aria-label="Back to levels">‹</button>
+        <div class="stat">
+          <span class="stat-label" id="level-label">Level 1</span>
+          <span class="stat-value" id="moves">0</span>
+          <span class="stat-label">moves</span>
+        </div>
+        <div class="stat stat-score">
+          <span class="stat-label">Score</span>
+          <span class="stat-value" id="score">0</span>
+          <div class="star-bar" aria-hidden="true">
+            <div class="star-fill" id="star-fill"></div>
+            <span class="star-mark" id="star-mark-0">★</span>
+            <span class="star-mark" id="star-mark-1">★</span>
+            <span class="star-mark" id="star-mark-2">★</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="goal" id="goal" aria-live="polite"></div>
+
+      <main class="board-wrap">
+        <div class="board" id="board" role="grid" aria-label="Game board"></div>
+        <div class="banner" id="banner" aria-live="polite"></div>
+      </main>
+    </section>
+
+    <div class="overlay" id="overlay" hidden>
+      <div class="card" id="card" role="dialog" aria-modal="true"></div>
+    </div>
   </div>
 
   <script src="js/theme.js"></script>
+  <script src="js/levels.js"></script>
   <script src="js/board.js"></script>
+  <script src="js/save.js"></script>
+  <script src="js/audio.js"></script>
   <script src="js/render.js"></script>
   <script src="js/main.js"></script>
 </body>

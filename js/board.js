@@ -1,22 +1,66 @@
-// Pure game logic, no DOM.
-// grid[row][col] -> { id, type } | null   (row 0 is the top)
+// Pure game logic, no DOM. Runs in the browser and in Node (for tests and tuning).
+// grid[row][col] -> Piece | null   (row 0 is the top)
+// Piece = { id, type, special }
+//   type:    0..colors-1, or -1 for a Sprinkle Bomb (it has no color)
+//   special: null
+//            'h' / 'v'  striped: clears its row / column
+//            'wrap'     gift box: blasts 3x3, falls, then blasts again
+//            'bomb'     sprinkle bomb: clears every piece of one color
+//            'armed'    a gift box that already blasted once; it goes off again next step
+// frost[row][col] -> layers of frosting under that cell (0, 1, or 2)
 window.M3 = window.M3 || {};
 
 M3.board = (function () {
   const SIZE = 8;
-  const TYPES = 6;
+  const POINTS = { match3: 60, match4: 120, shape: 200, extraCell: 20, blasted: 60, frost: 1000 };
+  let colors = 6;
   let nextId = 1;
 
+  function setColors(n) {
+    colors = n;
+  }
+
   function randomType() {
-    return Math.floor(Math.random() * TYPES);
+    return Math.floor(Math.random() * colors);
   }
 
   function newPiece(type) {
-    return { id: nextId++, type: type === undefined ? randomType() : type };
+    return { id: nextId++, type: type === undefined ? randomType() : type, special: null };
   }
 
   function emptyGrid() {
     return Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
+  }
+
+  function key(p) {
+    return p.r * SIZE + p.c;
+  }
+
+  function inBounds(p) {
+    return p.r >= 0 && p.r < SIZE && p.c >= 0 && p.c < SIZE;
+  }
+
+  function isAdjacent(a, b) {
+    return Math.abs(a.r - b.r) + Math.abs(a.c - b.c) === 1;
+  }
+
+  function swap(grid, a, b) {
+    const tmp = grid[a.r][a.c];
+    grid[a.r][a.c] = grid[b.r][b.c];
+    grid[b.r][b.c] = tmp;
+  }
+
+  // Sprinkle bombs and armed gift boxes never line up in a match.
+  function matchable(piece) {
+    return !!piece && piece.type >= 0 && piece.special !== 'armed';
+  }
+
+  // How a piece behaves when swapped: 'line' | 'wrap' | 'bomb' | null.
+  function kindOf(piece) {
+    if (!piece) return null;
+    if (piece.special === 'h' || piece.special === 'v') return 'line';
+    if (piece.special === 'wrap' || piece.special === 'bomb') return piece.special;
+    return null;
   }
 
   // True if placing `type` at (r, c) would complete 3 in a row with the two
@@ -43,41 +87,25 @@ M3.board = (function () {
     return grid;
   }
 
-  function inBounds(p) {
-    return p.r >= 0 && p.r < SIZE && p.c >= 0 && p.c < SIZE;
-  }
-
-  function isAdjacent(a, b) {
-    return Math.abs(a.r - b.r) + Math.abs(a.c - b.c) === 1;
-  }
-
-  function swap(grid, a, b) {
-    const tmp = grid[a.r][a.c];
-    grid[a.r][a.c] = grid[b.r][b.c];
-    grid[b.r][b.c] = tmp;
-  }
-
   // Scan rows, then columns, for runs of 3+.
   // Returns { matches: [{ cells, length, dir, type }], cells: deduped [{r, c}] }.
-  // An L/T shape yields two matches but its shared cell appears once in `cells`.
   function findMatches(grid) {
     const matches = [];
 
     function scan(dir) {
       for (let i = 0; i < SIZE; i++) {
         let run = [];
+        let runType = null;
         for (let j = 0; j <= SIZE; j++) {
           const r = dir === 'h' ? i : j;
           const c = dir === 'h' ? j : i;
           const piece = j < SIZE ? grid[r][c] : null;
-          const prev = run.length ? grid[run[0].r][run[0].c] : null;
-          if (piece && prev && piece.type === prev.type) {
+          if (run.length && matchable(piece) && piece.type === runType) {
             run.push({ r, c });
           } else {
-            if (run.length >= 3) {
-              matches.push({ cells: run, length: run.length, dir, type: prev.type });
-            }
-            run = piece ? [{ r, c }] : [];
+            if (run.length >= 3) matches.push({ cells: run, length: run.length, dir, type: runType });
+            run = matchable(piece) ? [{ r, c }] : [];
+            runType = piece ? piece.type : null;
           }
         }
       }
@@ -85,30 +113,307 @@ M3.board = (function () {
 
     scan('h');
     scan('v');
+    return { matches, cells: dedupe(matches.flatMap(m => m.cells)) };
+  }
 
+  function dedupe(cells) {
     const seen = new Set();
-    const cells = [];
+    return cells.filter(cell => {
+      const k = key(cell);
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }
+
+  // Runs that share a cell (L, T, + shapes) become one group.
+  function groupMatches(matches) {
+    const groups = [];
     for (const m of matches) {
-      for (const cell of m.cells) {
-        const key = cell.r * SIZE + cell.c;
-        if (!seen.has(key)) {
-          seen.add(key);
-          cells.push(cell);
+      const keys = new Set(m.cells.map(key));
+      const merged = { runs: [m], cells: m.cells.slice() };
+      for (let i = groups.length - 1; i >= 0; i--) {
+        if (groups[i].cells.some(cell => keys.has(key(cell)))) {
+          merged.runs.push(...groups[i].runs);
+          merged.cells.push(...groups[i].cells);
+          groups.splice(i, 1);
+        }
+      }
+      merged.cells = dedupe(merged.cells);
+      groups.push(merged);
+    }
+    return groups;
+  }
+
+  // The special piece a group earns: 5 in a line -> bomb, L/T -> gift box,
+  // 4 in a line -> striped. A horizontal 4 gives vertical stripes, and vice versa.
+  function specialFor(group) {
+    const longest = group.runs.reduce((best, run) => (run.length > best.length ? run : best));
+    if (longest.length >= 5) return 'bomb';
+    const hasH = group.runs.some(run => run.dir === 'h');
+    const hasV = group.runs.some(run => run.dir === 'v');
+    if (hasH && hasV) return 'wrap';
+    if (longest.length === 4) return longest.dir === 'h' ? 'v' : 'h';
+    return null;
+  }
+
+  function groupPoints(group, special) {
+    const n = group.cells.length;
+    if (special === 'wrap' || special === 'bomb') return POINTS.shape + POINTS.extraCell * Math.max(0, n - 5);
+    if (n >= 4) return POINTS.match4 + POINTS.extraCell * (n - 4);
+    return POINTS.match3;
+  }
+
+  // Where the new special appears: the swapped cell if it's in the group,
+  // else the corner of an L/T, else the middle of the longest run.
+  // Cells already holding a special are skipped (that special goes off instead).
+  function specialSpot(grid, group, preferred) {
+    const inGroup = new Set(group.cells.map(key));
+    const free = cell => inGroup.has(key(cell)) && !grid[cell.r][cell.c].special;
+    const hCells = new Set(group.runs.filter(run => run.dir === 'h').flatMap(run => run.cells).map(key));
+    const vCells = new Set(group.runs.filter(run => run.dir === 'v').flatMap(run => run.cells).map(key));
+    const corner = group.cells.filter(cell => hCells.has(key(cell)) && vCells.has(key(cell)));
+    const longest = group.runs.reduce((best, run) => (run.length > best.length ? run : best));
+    const middle = longest.cells[Math.floor((longest.cells.length - 1) / 2)];
+    const order = [...preferred, ...corner, middle, ...longest.cells, ...group.cells];
+    return order.find(free) || null;
+  }
+
+  function middleOf(group) {
+    const longest = group.runs.reduce((best, run) => (run.length > best.length ? run : best));
+    return longest.cells[Math.floor((longest.cells.length - 1) / 2)];
+  }
+
+  function area(r, c, radius) {
+    const out = [];
+    for (let dr = -radius; dr <= radius; dr++) {
+      for (let dc = -radius; dc <= radius; dc++) out.push({ r: r + dr, c: c + dc });
+    }
+    return out.filter(inBounds);
+  }
+
+  function rowCells(r) {
+    return Array.from({ length: SIZE }, (_, c) => ({ r, c }));
+  }
+
+  function colCells(c) {
+    return Array.from({ length: SIZE }, (_, r) => ({ r, c }));
+  }
+
+  function allCells() {
+    return Array.from({ length: SIZE * SIZE }, (_, i) => ({ r: Math.floor(i / SIZE), c: i % SIZE }));
+  }
+
+  function cellsOfColor(grid, type) {
+    return allCells().filter(({ r, c }) => grid[r][c] && grid[r][c].type === type);
+  }
+
+  function randomColorOnBoard(grid) {
+    const types = [...new Set(grid.flat().filter(p => p && p.type >= 0).map(p => p.type))];
+    return types.length ? types[Math.floor(Math.random() * types.length)] : -1;
+  }
+
+  // Clears `seeds` and everything their specials set off, in waves.
+  // Cells in `protect` (where new specials are being made) are left alone.
+  // Mutates grid and frost. Appends visual effects to `effects`.
+  function blast(grid, frost, seeds, protect, effects) {
+    const removed = [];
+    const frosted = [];
+    const visited = new Set();
+    const queue = seeds.slice();
+
+    while (queue.length) {
+      const cell = queue.shift();
+      if (!inBounds(cell)) continue;
+      const k = key(cell);
+      if (visited.has(k) || protect.has(k)) continue;
+      visited.add(k);
+      const piece = grid[cell.r][cell.c];
+      if (!piece || piece.special === 'armed') continue;
+
+      const { r, c } = cell;
+      if (piece.special === 'h') {
+        effects.push({ kind: 'row', r, c });
+        queue.push(...rowCells(r));
+      } else if (piece.special === 'v') {
+        effects.push({ kind: 'col', r, c });
+        queue.push(...colCells(c));
+      } else if (piece.special === 'wrap') {
+        // First blast: the box stays put, glowing, and goes off again after it falls.
+        effects.push({ kind: 'blast', r, c, radius: 1 });
+        queue.push(...area(r, c, 1));
+        piece.special = 'armed';
+        piece.radius = 1;
+        continue;
+      } else if (piece.special === 'bomb') {
+        const targets = cellsOfColor(grid, randomColorOnBoard(grid));
+        effects.push({ kind: 'bomb', r, c, targets });
+        queue.push(...targets);
+      }
+
+      removed.push({ r, c, piece });
+      grid[r][c] = null;
+      if (frost && frost[r][c] > 0) {
+        frost[r][c]--;
+        frosted.push({ r, c, level: frost[r][c] });
+      }
+    }
+    return { removed, frosted };
+  }
+
+  // Bundles a clear into one record for the game loop and renderer.
+  function record(result, effects, groups, chain, created, converted) {
+    const groupKeys = new Set();
+    const popups = [];
+    let score = 0;
+    for (const g of groups) {
+      g.cells.forEach(cell => groupKeys.add(key(cell)));
+      const pts = g.points * chain;
+      score += pts;
+      popups.push({ r: g.mid.r, c: g.mid.c, points: pts });
+    }
+
+    const extra = result.removed.filter(cell => !groupKeys.has(key(cell)));
+    const bonus = extra.length * POINTS.blasted + result.frosted.length * POINTS.frost;
+    if (bonus) {
+      const spots = extra.length ? extra : result.frosted;
+      const avg = prop => Math.round(spots.reduce((sum, s) => sum + s[prop], 0) / spots.length);
+      popups.push({ r: avg('r'), c: avg('c'), points: bonus });
+      score += bonus;
+    }
+
+    const collected = {};
+    const add = k => { collected[k] = (collected[k] || 0) + 1; };
+    for (const { piece } of result.removed) if (piece.type >= 0) add(piece.type);
+    for (const cr of created) add(cr.special === 'h' || cr.special === 'v' ? 'line' : cr.special);
+
+    return {
+      effects, removed: result.removed, frosted: result.frosted,
+      created, converted: converted || [], score, popups, collected,
+    };
+  }
+
+  // One clear step: armed gift boxes go off, matches clear and make specials,
+  // and specials caught in the blast fire. With `fireSpecials`, every special on
+  // the board fires too (the end-of-level finale). Returns null if nothing happens.
+  function step(grid, frost, { preferred = [], chain = 1, fireSpecials = false } = {}) {
+    const seeds = [];
+    const effects = [];
+    const protect = new Set();
+    const created = [];
+
+    // Find matches before disarming boxes, so an armed box can't join one.
+    const groups = groupMatches(findMatches(grid).matches);
+
+    for (const { r, c } of allCells()) {
+      const piece = grid[r][c];
+      if (piece && piece.special === 'armed') {
+        const radius = piece.radius || 1;
+        piece.special = null;
+        effects.push({ kind: 'blast', r, c, radius });
+        seeds.push(...area(r, c, radius));
+      } else if (fireSpecials && kindOf(piece)) {
+        seeds.push({ r, c });
+      }
+    }
+
+    for (const g of groups) {
+      seeds.push(...g.cells);
+      const special = specialFor(g);
+      g.points = groupPoints(g, special);
+      g.mid = middleOf(g);
+      const spot = special ? specialSpot(grid, g, preferred) : null;
+      if (spot) {
+        protect.add(key(spot));
+        created.push({ r: spot.r, c: spot.c, special });
+      }
+    }
+
+    if (!seeds.length) return null;
+    const result = blast(grid, frost, seeds, protect, effects);
+
+    for (const cr of created) {
+      const piece = grid[cr.r][cr.c];
+      piece.special = cr.special;
+      if (cr.special === 'bomb') piece.type = -1;
+      if (frost && frost[cr.r][cr.c] > 0) {
+        frost[cr.r][cr.c]--;
+        result.frosted.push({ r: cr.r, c: cr.c, level: frost[cr.r][cr.c] });
+      }
+    }
+    return record(result, effects, groups, chain, created);
+  }
+
+  // A swap that works without a match: a bomb with anything, or two specials.
+  function isCombo(grid, a, b) {
+    const ka = kindOf(grid[a.r][a.c]);
+    const kb = kindOf(grid[b.r][b.c]);
+    return ka === 'bomb' || kb === 'bomb' || (!!ka && !!kb);
+  }
+
+  // Resolves a combo swap (call after the pieces are swapped). `b` is where the
+  // player moved their piece to, which is the combo's center.
+  function comboStep(grid, frost, a, b) {
+    const p = grid[a.r][a.c];
+    const q = grid[b.r][b.c];
+    const kp = kindOf(p);
+    const kq = kindOf(q);
+    const effects = [];
+    const converted = [];
+    const protect = new Set();
+    let seeds = [];
+
+    if (kp === 'bomb' && kq === 'bomb') {
+      // Two bombs: clear the whole board.
+      p.special = q.special = null;
+      effects.push({ kind: 'board' });
+      seeds = allCells();
+    } else if (kp === 'bomb' || kq === 'bomb') {
+      const [bomb, other, at] = kp === 'bomb' ? [p, q, a] : [q, p, b];
+      const ko = kindOf(other);
+      const targets = cellsOfColor(grid, other.type);
+      bomb.special = null;
+      // Bomb + striped / gift box: every piece of that color becomes one, then they all fire.
+      if (ko === 'line' || ko === 'wrap') {
+        for (const t of targets) {
+          const piece = grid[t.r][t.c];
+          if (piece.special) continue;
+          piece.special = ko === 'wrap' ? 'wrap' : (Math.random() < 0.5 ? 'h' : 'v');
+          converted.push(piece);
+        }
+      }
+      effects.push({ kind: 'bomb', r: at.r, c: at.c, targets });
+      seeds = [at, ...targets];
+    } else if (kp === 'line' && kq === 'line') {
+      // Two striped: a cross through the center.
+      p.special = q.special = null;
+      effects.push({ kind: 'row', r: b.r, c: b.c }, { kind: 'col', r: b.r, c: b.c });
+      seeds = [...rowCells(b.r), ...colCells(b.c)];
+    } else if (kp === 'wrap' && kq === 'wrap') {
+      // Two gift boxes: a big 5x5 blast, then another after falling.
+      p.special = null;
+      q.special = 'armed';
+      q.radius = 2;
+      protect.add(key(b));
+      effects.push({ kind: 'blast', r: b.r, c: b.c, radius: 2 });
+      seeds = area(b.r, b.c, 2);
+    } else {
+      // Striped + gift box: three rows and three columns.
+      p.special = q.special = null;
+      for (let d = -1; d <= 1; d++) {
+        if (b.r + d >= 0 && b.r + d < SIZE) {
+          effects.push({ kind: 'row', r: b.r + d, c: b.c });
+          seeds.push(...rowCells(b.r + d));
+        }
+        if (b.c + d >= 0 && b.c + d < SIZE) {
+          effects.push({ kind: 'col', r: b.r, c: b.c + d });
+          seeds.push(...colCells(b.c + d));
         }
       }
     }
-    return { matches, cells };
-  }
 
-  // Swaps a and b if that creates a match; otherwise leaves the grid untouched.
-  function trySwap(grid, a, b) {
-    if (!inBounds(a) || !inBounds(b) || !isAdjacent(a, b)) return false;
-    swap(grid, a, b);
-    if (findMatches(grid).matches.length === 0) {
-      swap(grid, a, b);
-      return false;
-    }
-    return true;
+    const result = blast(grid, frost, seeds, protect, effects);
+    return record(result, effects, [], 1, [], converted);
   }
 
   function clearCells(grid, cells) {
@@ -150,13 +455,14 @@ M3.board = (function () {
     return spawns;
   }
 
-  // First swap that makes a match, or null. Handy for hints later.
+  // First swap that does something (a match or a combo), or null. Used for hints.
   function findValidMove(grid) {
     for (let r = 0; r < SIZE; r++) {
       for (let c = 0; c < SIZE; c++) {
         const a = { r, c };
         for (const b of [{ r, c: c + 1 }, { r: r + 1, c }]) {
-          if (!inBounds(b)) continue;
+          if (!inBounds(b) || !grid[r][c] || !grid[b.r][b.c]) continue;
+          if (isCombo(grid, a, b)) return { a, b };
           swap(grid, a, b);
           const ok = findMatches(grid).matches.length > 0;
           swap(grid, a, b);
@@ -190,21 +496,20 @@ M3.board = (function () {
     return grid;
   }
 
-  // Points for one clear step. 3 → 30, 4 → 60, 5 → 120, each piece past 4 adds 20 more,
-  // summed over all runs, times the chain number (1, 2, 3...).
-  function scoreFor(matches, chain) {
-    let total = 0;
-    for (const m of matches) {
-      if (m.length === 3) total += 30;
-      else if (m.length === 4) total += 60;
-      else total += 100 + 20 * (m.length - 4);
-    }
-    return total * chain;
+  // Frosting map from a level's strings ('.', '1', '2' per cell).
+  function parseFrost(rows) {
+    return Array.from({ length: SIZE }, (_, r) =>
+      Array.from({ length: SIZE }, (_, c) => (rows ? Number(rows[r][c]) || 0 : 0)));
+  }
+
+  function frostLeft(frost) {
+    return frost.flat().reduce((sum, n) => sum + n, 0);
   }
 
   return {
-    SIZE, TYPES,
-    newPiece, createBoard, isAdjacent, swap, findMatches, trySwap,
-    clearCells, applyGravity, refill, findValidMove, hasValidMove, shuffle, scoreFor,
+    SIZE, POINTS,
+    setColors, newPiece, createBoard, isAdjacent, swap, kindOf, findMatches, isCombo,
+    step, comboStep, clearCells, applyGravity, refill, findValidMove, hasValidMove, shuffle,
+    parseFrost, frostLeft,
   };
 })();
