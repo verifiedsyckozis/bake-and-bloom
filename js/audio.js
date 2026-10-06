@@ -1,6 +1,7 @@
 // Game sound effects, synthesized with the Web Audio API (no sound files).
-// Browsers only allow sound after the player touches the page, so input
-// handlers call unlock() first.
+// Browsers only allow sound after the player taps the page, so input
+// handlers call unlock() first. Phones only count a finished tap (touchend,
+// click), not the moment a finger lands.
 window.M3 = window.M3 || {};
 
 M3.audio = (function () {
@@ -26,7 +27,16 @@ M3.audio = (function () {
   }
 
   function unlock() {
-    if (init() && ctx.state === 'suspended') ctx.resume();
+    if (!init()) return;
+    // Treat these as game sounds that play even with the iPhone silent switch on
+    // (Safari 16.4+). Without this, iOS mutes web audio when the phone is on silent.
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* ignore */ }
+    if (ctx.state !== 'running') ctx.resume();
+    // Older iOS also needs a sound started inside the tap itself.
+    const src = ctx.createBufferSource();
+    src.buffer = ctx.createBuffer(1, 1, 22050);
+    src.connect(ctx.destination);
+    src.start(0);
   }
 
   function setMuted(value) {
@@ -130,7 +140,8 @@ M3.audio = (function () {
   };
 
   function play(name, arg) {
-    if (muted || !init() || ctx.state !== 'running') return;
+    if (muted || !ctx) return;
+    if (ctx.state !== 'running') ctx.resume(); // e.g. after the phone locked or a call
     SOUNDS[name](arg);
   }
 

@@ -492,9 +492,11 @@ window.M3 = window.M3 || {};
 
   boardEl.addEventListener('pointercancel', () => { drag = null; });
 
-  // Sound can only start after the player touches the page.
-  document.addEventListener('pointerdown', () => A.unlock(), true);
-  document.addEventListener('keydown', () => A.unlock(), true);
+  // Sound can only start after the player taps the page. Different browsers
+  // accept different events, so listen to all of them.
+  for (const type of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) {
+    document.addEventListener(type, () => A.unlock(), true);
+  }
 
   $('back').addEventListener('click', () => {
     if (game.busy) return;
